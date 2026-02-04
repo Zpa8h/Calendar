@@ -917,6 +917,165 @@ function neatocal_aligned_weekdays() {
 
 }
 
+function neatocal_continuous_weeks() {
+  let year      = parseInt(NEATOCAL_PARAM.year);
+  let start_mo  = parseInt(NEATOCAL_PARAM.start_month);
+  let n_mo      = parseInt(NEATOCAL_PARAM.n_month);
+
+  // Calculate the date range to display
+  //
+  let range_start_year = year + Math.floor(start_mo / 12);
+  let range_start_month = start_mo % 12;
+  let end_mo = start_mo + n_mo;
+  let range_end_year = year + Math.floor((end_mo - 1) / 12);
+  let range_end_month = (end_mo - 1) % 12;
+
+  let range_start = new Date(range_start_year, range_start_month, 1);
+  let range_end = new Date(range_end_year, range_end_month + 1, 0); // last day of last month
+
+  // Find the Sunday on or before range_start (start of first grid week)
+  //
+  let grid_start = new Date(range_start);
+  grid_start.setDate(grid_start.getDate() - grid_start.getDay());
+
+  // Find the Saturday on or after range_end (end of last grid week)
+  //
+  let grid_end = new Date(range_end);
+  if (grid_end.getDay() < 6) {
+    grid_end.setDate(grid_end.getDate() + (6 - grid_end.getDay()));
+  }
+
+  // Build header row: [Month] [Su] [Mo] [Tu] [We] [Th] [Fr] [Sa]
+  //
+  let ui_tr_mo = document.getElementById("ui_tr_month_name");
+  ui_tr_mo.innerHTML = "";
+
+  let th_month_label = H.th("");
+  th_month_label.classList.add("v2-month-header");
+  ui_tr_mo.appendChild(th_month_label);
+
+  for (let d = 0; d < 7; d++) {
+    let th = H.th(NEATOCAL_PARAM.weekday_code[d]);
+    if (NEATOCAL_PARAM.weekend_days.includes(d)) {
+      weekend_styles(th);
+    } else {
+      weekday_styles(th);
+    }
+    ui_tr_mo.appendChild(th);
+  }
+
+  // Track which months have already been labeled
+  //
+  let labeled_months = {};
+
+  let tbody = document.getElementById("ui_tbody");
+  let cur = new Date(grid_start);
+
+  while (cur <= grid_end) {
+
+    let tr = H.tr();
+    if (NEATOCAL_PARAM.cell_height &&
+        NEATOCAL_PARAM.cell_height !== "") {
+      tr.style.height = NEATOCAL_PARAM.cell_height;
+    }
+
+    // Collect the 7 dates for this week
+    //
+    let week_dates = [];
+    for (let d = 0; d < 7; d++) {
+      let day_date = new Date(cur);
+      day_date.setDate(day_date.getDate() + d);
+      week_dates.push(day_date);
+    }
+
+    // Month indicator cell
+    // Show month name on the row containing the 1st of a month,
+    // or on the first row for the starting month
+    //
+    let month_label = "";
+    let month_td = H.td();
+    month_td.classList.add("v2-month-cell");
+
+    // Check if this is the very first row -- label the starting month
+    //
+    if (cur.getTime() === grid_start.getTime()) {
+      let mo_key = range_start.getFullYear() + "-" + range_start.getMonth();
+      if (!labeled_months[mo_key]) {
+        month_label = NEATOCAL_PARAM.month_code[range_start.getMonth() % 12];
+        labeled_months[mo_key] = true;
+      }
+    }
+
+    // Check if any day this week is the 1st of a month within range
+    //
+    for (let d = 0; d < 7; d++) {
+      let dd = week_dates[d];
+      if (dd.getDate() === 1 &&
+          dd >= range_start && dd <= range_end) {
+        let mo_key = dd.getFullYear() + "-" + dd.getMonth();
+        if (!labeled_months[mo_key]) {
+          month_label = NEATOCAL_PARAM.month_code[dd.getMonth() % 12];
+          labeled_months[mo_key] = true;
+        }
+      }
+    }
+
+    let month_span = H.span(month_label);
+    month_styles(month_span);
+    month_td.appendChild(month_span);
+    tr.appendChild(month_td);
+
+    // Day cells (Su through Sa)
+    //
+    for (let d = 0; d < 7; d++) {
+      let day_date = week_dates[d];
+      let td = H.td();
+
+      // Only populate cells within the display range
+      //
+      if (day_date >= range_start && day_date <= range_end) {
+        td.id = "ui_" + fmt_date(day_date.getFullYear(), day_date.getMonth() + 1, day_date.getDate());
+
+        let span_date = H.span(day_date.getDate().toString(), "date");
+        date_styles(span_date);
+
+        if (NEATOCAL_PARAM.weekend_days.includes(day_date.getDay())) {
+          td.classList.add("weekend");
+          weekend_styles(span_date);
+          weekend_date_styles(span_date);
+        } else {
+          weekday_styles(span_date);
+        }
+
+        td.appendChild(span_date);
+
+        // Week numbers (show on Monday)
+        //
+        if (day_date.getDay() === 1 && NEATOCAL_PARAM.show_week_numbers) {
+          let span_week_no = H.span(getISOWeekNumber(day_date), "week-number");
+          week_styles(span_week_no);
+          td.appendChild(span_week_no);
+        }
+
+        let yyyy_mm_dd = fmt_date(day_date.getFullYear(), day_date.getMonth() + 1, day_date.getDate());
+        render_cell_data(td, yyyy_mm_dd);
+
+        // Moon phase
+        //
+        renderMoonPhase(td, day_date.getFullYear(), day_date.getMonth(), day_date.getDate());
+      }
+
+      tr.appendChild(td);
+    }
+
+    tbody.appendChild(tr);
+
+    // Advance to next week
+    //
+    cur.setDate(cur.getDate() + 7);
+  }
+}
+
 function neatocal_post_process() {
   let highlight_color = NEATOCAL_PARAM.highlight_color;
   let x = document.getElementsByClassName("weekend");
@@ -1597,6 +1756,9 @@ function neatocal_init() {
       NEATOCAL_PARAM.show_week_numbers = true;
       NEATOCAL_PARAM.weekend_days = [0];
     }
+    else if (_l == "continuous-weeks") {
+      layout = "continuous-weeks";
+    }
   }
   NEATOCAL_PARAM.layout = layout;
 
@@ -1885,6 +2047,9 @@ function neatocal_render() {
   }
   else if (layout == "hallon-almanackan") {
     neatocal_hallon_almanackan();
+  }
+  else if (layout == "continuous-weeks") {
+    neatocal_continuous_weeks();
   }
   else {
     neatocal_default();
