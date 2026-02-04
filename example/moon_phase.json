@@ -1,0 +1,11 @@
+{
+  "param": {
+    "year": 2025,
+    "layout": "aligned-weekdays",
+    "start_day": 0,
+    "cell_height": "2.5em",
+    "show_moon_phase": true,
+    "moon_phase_style": "css",
+    "moon_phase_display": "changes"
+  }
+}
