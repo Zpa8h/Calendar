@@ -24,6 +24,26 @@ SOFTWARE.
 
 */
 
+/* -----------------------------------------------------------
+   CSS Custom Properties (editable via dev tools on :root)
+   ----------------------------------------------------------- */
+:root {
+  --v2-font-size:         0.9vmin;
+  --v2-header-font-size:  1.1vmin;
+  --v2-month-font-size:   1.1vmin;
+  --v2-date-font-size:    1em;
+  --v2-event-font-size:   0.7vmin;
+
+  --v2-cell-height:       5em;
+  --v2-header-height:     1.5em;
+  --v2-month-col-width:   1.5em;
+
+  --v2-cell-border:       1px solid #ddd;
+  --v2-weekend-bg:        #fafafa;
+  --v2-header-color:      #555;
+  --v2-month-color:       #333;
+}
+
 @media print {
   @page {
     margin: 0;
@@ -74,51 +94,61 @@ table {
 /* --- Header row (day-of-week labels) --- */
 
 thead tr {
-  height: 1.5em;
+  height: var(--v2-header-height);
 }
 
 th {
   font-weight: 400;
   text-transform: uppercase;
-  font-size: 1.1vmin;
+  font-size: var(--v2-header-font-size);
   padding: 0.2em 0.3em;
-  color: #555;
+  color: var(--v2-header-color);
   border: none;
 }
 
 /* Month header column in the header row */
 th.v2-month-header {
   border: none;
-  width: 3.5em;
+  width: var(--v2-month-col-width);
 }
 
 /* --- Month indicator column --- */
 
 td.v2-month-cell {
   border: none;
-  font-size: 1.1vmin;
   font-weight: 400;
-  text-transform: uppercase;
-  color: #333;
-  padding: 0.2em 0.4em 0 0.2em;
+  color: var(--v2-month-color);
+  padding: 0;
   vertical-align: top;
-  width: 3.5em;
+  width: var(--v2-month-col-width);
+  overflow: visible;
+  text-transform: none;
+}
+
+td.v2-month-cell span {
+  display: block;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  font-size: var(--v2-month-font-size);
+  line-height: 1;
+  padding: 0.2em 0;
 }
 
 /* --- Date cells --- */
 
 td {
   font-weight: 300;
-  font-size: 0.9vmin;
+  font-size: var(--v2-font-size);
   color: #000;
-  border: 1px solid #ddd;
+  border: var(--v2-cell-border);
   padding: 0.2em 0.3em;
   vertical-align: top;
-  height: 5em;
+  height: var(--v2-cell-height);
 }
 
 td:empty {
-  border: 1px solid #ddd;
+  border: var(--v2-cell-border);
 }
 
 /* --- Date number --- */
@@ -126,7 +156,7 @@ td:empty {
 .date {
   display: block;
   text-align: right;
-  font-size: 1em;
+  font-size: var(--v2-date-font-size);
   line-height: 1.2;
 }
 
@@ -141,7 +171,7 @@ td:empty {
 /* --- Weekend cells --- */
 
 .weekend {
-  background: #fafafa;
+  background: var(--v2-weekend-bg);
 }
 
 /* --- General --- */
@@ -218,7 +248,7 @@ p {
 /* --- Event styles --- */
 
 .event {
-  font-size: .7vmin;
+  font-size: var(--v2-event-font-size);
   line-height: 1.2;
   margin-top: 0.2em;
   padding: 0.05em 0.3em;
