@@ -71,7 +71,7 @@ var NEATOCAL_PARAM = {
 
   // Text to use for displaying weekdays
   //
-  "weekday_code" : [ "Su", "M", "T", "W", "R", "F", "Sa"  ],
+  "weekday_code" : [ "Su", "M", "T", "W", "Th", "F", "Sa"  ],
 
   // Weekday representation https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/DateTimeFormat#weekday
   //
@@ -1352,6 +1352,17 @@ function ics_parse_events(raw) {
       current.rrule = value;
     } else if (name === "DURATION") {
       current.duration = value;
+    } else if (name === "EXDATE") {
+      if (!current.exdates) { current.exdates = []; }
+      let ex_values = value.split(",");
+      for (let ev = 0; ev < ex_values.length; ev++) {
+        let ex_parsed = ics_parse_datetime(ex_values[ev].trim(), params);
+        if (ex_parsed) {
+          current.exdates.push(
+            fmt_date(ex_parsed.date.getFullYear(), ex_parsed.date.getMonth() + 1, ex_parsed.date.getDate())
+          );
+        }
+      }
     }
   }
 
@@ -1422,12 +1433,333 @@ function ics_expand_event(event, color, text_color, source_id, view_start, view_
   }
 }
 
+// --- RRULE expansion ---
+
+var ICS_DAY_MAP = { "SU": 0, "MO": 1, "TU": 2, "WE": 3, "TH": 4, "FR": 5, "SA": 6 };
+
+function ics_parse_rrule(rrule_str) {
+  let parts = rrule_str.split(";");
+  let rule = {};
+  for (let i = 0; i < parts.length; i++) {
+    let kv = parts[i].split("=");
+    if (kv.length === 2) {
+      rule[kv[0]] = kv[1];
+    }
+  }
+  return rule;
+}
+
+function ics_parse_byday(byday_str) {
+  let parts = byday_str.split(",");
+  let result = [];
+  for (let i = 0; i < parts.length; i++) {
+    let p = parts[i].trim();
+    let match = p.match(/^(-?\d+)?(SU|MO|TU|WE|TH|FR|SA)$/);
+    if (match) {
+      result.push({
+        ordinal: match[1] ? parseInt(match[1]) : null,
+        day: ICS_DAY_MAP[match[2]]
+      });
+    }
+  }
+  return result;
+}
+
+// Find the nth (or last if negative) occurrence of day_of_week in a given month.
+// Returns a Date or null if out of range.
+//
+function ics_nth_weekday_in_month(year, month, day_of_week, ordinal) {
+  if (ordinal > 0) {
+    let first = new Date(year, month, 1);
+    let diff = (day_of_week - first.getDay() + 7) % 7;
+    let date = 1 + diff + (ordinal - 1) * 7;
+    let last_day = new Date(year, month + 1, 0).getDate();
+    if (date > last_day) { return null; }
+    return new Date(year, month, date);
+  } else if (ordinal < 0) {
+    let last_day = new Date(year, month + 1, 0).getDate();
+    let last = new Date(year, month, last_day);
+    let diff = (last.getDay() - day_of_week + 7) % 7;
+    let date = last_day - diff + (ordinal + 1) * 7;
+    if (date < 1) { return null; }
+    return new Date(year, month, date);
+  }
+  return null;
+}
+
+// Expand a recurring event (with RRULE) into individual occurrences
+// within the view range, then add each occurrence as an event.
+//
+// Supports FREQ=DAILY/WEEKLY/MONTHLY/YEARLY with INTERVAL, COUNT,
+// UNTIL, BYDAY (with ordinal), BYMONTH, BYMONTHDAY, and EXDATE.
+//
+function ics_expand_rrule(event, color, text_color, source_id, view_start, view_end) {
+  if (!event.dtstart) { return; }
+
+  let start_parsed = ics_parse_datetime(event.dtstart.value, event.dtstart.params);
+  if (!start_parsed) { return; }
+
+  let rule = ics_parse_rrule(event.rrule);
+  let freq = rule.FREQ;
+  if (!freq) { return; }
+
+  let interval = parseInt(rule.INTERVAL) || 1;
+  let count = rule.COUNT ? parseInt(rule.COUNT) : null;
+  let until = null;
+  if (rule.UNTIL) {
+    let until_parsed = ics_parse_datetime(rule.UNTIL, "");
+    if (until_parsed) { until = until_parsed.date; }
+  }
+
+  let end_parsed = event.dtend ? ics_parse_datetime(event.dtend.value, event.dtend.params) : null;
+  let orig_start = start_parsed.date;
+  let all_day = start_parsed.all_day || (end_parsed && end_parsed.all_day);
+
+  let duration_ms = 0;
+  if (end_parsed) {
+    duration_ms = end_parsed.date.getTime() - orig_start.getTime();
+  } else if (all_day) {
+    duration_ms = 86400000;
+  }
+
+  let byday = rule.BYDAY ? ics_parse_byday(rule.BYDAY) : null;
+  let bymonth = rule.BYMONTH ? rule.BYMONTH.split(",").map(Number) : null;
+  let bymonthday = rule.BYMONTHDAY ? rule.BYMONTHDAY.split(",").map(Number) : null;
+
+  // Build set of excluded dates for fast lookup
+  //
+  let exdates = {};
+  if (event.exdates) {
+    for (let i = 0; i < event.exdates.length; i++) {
+      exdates[event.exdates[i]] = true;
+    }
+  }
+
+  let effective_end = new Date(view_end);
+  if (until && until < effective_end) { effective_end = until; }
+
+  let occurrences = [];
+  let occ_count = 0;
+  let max_iter = 5000;
+  let iter = 0;
+
+  if (freq === "DAILY") {
+    let cur = new Date(orig_start);
+    while (cur <= effective_end && iter < max_iter) {
+      iter++;
+      if (count !== null && occ_count >= count) { break; }
+      if (cur >= view_start || (duration_ms > 0 && new Date(cur.getTime() + duration_ms) >= view_start)) {
+        occurrences.push(new Date(cur));
+      }
+      occ_count++;
+      cur.setDate(cur.getDate() + interval);
+    }
+  }
+
+  else if (freq === "WEEKLY") {
+    let target_days = [];
+    if (byday) {
+      for (let i = 0; i < byday.length; i++) { target_days.push(byday[i].day); }
+    } else {
+      target_days.push(orig_start.getDay());
+    }
+    target_days.sort(function(a, b) { return a - b; });
+
+    let week_start = new Date(orig_start);
+    week_start.setDate(week_start.getDate() - week_start.getDay());
+
+    let cur_week = new Date(week_start);
+    while (cur_week <= effective_end && iter < max_iter) {
+      iter++;
+      for (let d = 0; d < target_days.length; d++) {
+        let day_date = new Date(cur_week);
+        day_date.setDate(day_date.getDate() + target_days[d]);
+
+        if (day_date < orig_start) { continue; }
+        if (count !== null && occ_count >= count) { break; }
+        if (day_date > effective_end) { break; }
+
+        if (day_date >= view_start || (duration_ms > 0 && new Date(day_date.getTime() + duration_ms) >= view_start)) {
+          occurrences.push(new Date(day_date));
+        }
+        occ_count++;
+      }
+      cur_week.setDate(cur_week.getDate() + 7 * interval);
+    }
+  }
+
+  else if (freq === "MONTHLY") {
+    let cur_year = orig_start.getFullYear();
+    let cur_month = orig_start.getMonth();
+
+    while (iter < max_iter) {
+      iter++;
+      if (new Date(cur_year, cur_month, 1) > effective_end) { break; }
+      if (count !== null && occ_count >= count) { break; }
+
+      let dates_this = [];
+
+      if (byday) {
+        for (let b = 0; b < byday.length; b++) {
+          if (byday[b].ordinal !== null) {
+            let d = ics_nth_weekday_in_month(cur_year, cur_month, byday[b].day, byday[b].ordinal);
+            if (d) { dates_this.push(d); }
+          } else {
+            let first = new Date(cur_year, cur_month, 1);
+            let last_day = new Date(cur_year, cur_month + 1, 0).getDate();
+            let diff = (byday[b].day - first.getDay() + 7) % 7;
+            for (let dd = 1 + diff; dd <= last_day; dd += 7) {
+              dates_this.push(new Date(cur_year, cur_month, dd));
+            }
+          }
+        }
+      } else if (bymonthday) {
+        let last_day = new Date(cur_year, cur_month + 1, 0).getDate();
+        for (let b = 0; b < bymonthday.length; b++) {
+          let md = bymonthday[b];
+          if (md > 0 && md <= last_day) {
+            dates_this.push(new Date(cur_year, cur_month, md));
+          } else if (md < 0) {
+            let d = last_day + md + 1;
+            if (d >= 1) { dates_this.push(new Date(cur_year, cur_month, d)); }
+          }
+        }
+      } else {
+        let orig_day = orig_start.getDate();
+        let last_day = new Date(cur_year, cur_month + 1, 0).getDate();
+        if (orig_day <= last_day) {
+          dates_this.push(new Date(cur_year, cur_month, orig_day));
+        }
+      }
+
+      dates_this.sort(function(a, b) { return a - b; });
+      for (let di = 0; di < dates_this.length; di++) {
+        let d = dates_this[di];
+        if (d < orig_start) { continue; }
+        if (count !== null && occ_count >= count) { break; }
+        if (d > effective_end) { break; }
+        if (d >= view_start || (duration_ms > 0 && new Date(d.getTime() + duration_ms) >= view_start)) {
+          occurrences.push(d);
+        }
+        occ_count++;
+      }
+
+      cur_month += interval;
+      cur_year += Math.floor(cur_month / 12);
+      cur_month = cur_month % 12;
+    }
+  }
+
+  else if (freq === "YEARLY") {
+    let cur_year = orig_start.getFullYear();
+
+    while (iter < max_iter) {
+      iter++;
+      if (new Date(cur_year, 11, 31) < orig_start) { cur_year += interval; continue; }
+      if (new Date(cur_year, 0, 1) > effective_end) { break; }
+      if (count !== null && occ_count >= count) { break; }
+
+      let target_months = bymonth ? bymonth.map(function(m) { return m - 1; }) : [orig_start.getMonth()];
+
+      for (let mi = 0; mi < target_months.length; mi++) {
+        let month = target_months[mi];
+        let dates_this = [];
+
+        if (byday) {
+          for (let b = 0; b < byday.length; b++) {
+            if (byday[b].ordinal !== null) {
+              let d = ics_nth_weekday_in_month(cur_year, month, byday[b].day, byday[b].ordinal);
+              if (d) { dates_this.push(d); }
+            }
+          }
+        } else if (bymonthday) {
+          let last_day = new Date(cur_year, month + 1, 0).getDate();
+          for (let b = 0; b < bymonthday.length; b++) {
+            let md = bymonthday[b];
+            if (md > 0 && md <= last_day) {
+              dates_this.push(new Date(cur_year, month, md));
+            }
+          }
+        } else {
+          let orig_day = orig_start.getDate();
+          let last_day = new Date(cur_year, month + 1, 0).getDate();
+          if (orig_day <= last_day) {
+            dates_this.push(new Date(cur_year, month, orig_day));
+          }
+        }
+
+        dates_this.sort(function(a, b) { return a - b; });
+        for (let di = 0; di < dates_this.length; di++) {
+          let d = dates_this[di];
+          if (d < orig_start) { continue; }
+          if (count !== null && occ_count >= count) { break; }
+          if (d > effective_end) { break; }
+          if (d >= view_start || (duration_ms > 0 && new Date(d.getTime() + duration_ms) >= view_start)) {
+            occurrences.push(d);
+          }
+          occ_count++;
+        }
+      }
+
+      cur_year += interval;
+    }
+  }
+
+  // Expand each occurrence into day-level event entries,
+  // skipping any dates in the EXDATE set.
+  //
+  for (let i = 0; i < occurrences.length; i++) {
+    let occ_start = occurrences[i];
+    let occ_end_time = occ_start.getTime() + duration_ms;
+
+    let start_day = new Date(occ_start.getFullYear(), occ_start.getMonth(), occ_start.getDate());
+    let end_day;
+    if (duration_ms > 0) {
+      let occ_end = new Date(occ_end_time);
+      end_day = new Date(occ_end.getFullYear(), occ_end.getMonth(), occ_end.getDate());
+      if (all_day ||
+          (occ_end.getHours() === 0 && occ_end.getMinutes() === 0 && occ_end.getSeconds() === 0)) {
+        end_day = new Date(end_day.getTime() - 86400000);
+      }
+    } else {
+      end_day = new Date(start_day);
+    }
+
+    let cur = new Date(start_day);
+    while (cur <= end_day) {
+      if (cur >= view_start && cur < view_end) {
+        let date_id = fmt_date(cur.getFullYear(), cur.getMonth() + 1, cur.getDate());
+
+        // Skip excluded dates
+        //
+        if (exdates[date_id]) { cur.setDate(cur.getDate() + 1); continue; }
+
+        let is_start = (cur.getTime() === start_day.getTime());
+        let is_end = (cur.getTime() === end_day.getTime());
+
+        add_event_to_date(date_id, {
+          title: event.summary || "(no title)",
+          color: color,
+          text_color: text_color,
+          source_id: source_id,
+          span: {
+            start: is_start,
+            end: is_end
+          }
+        });
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+  }
+}
+
 function ics_import_text(raw, color, text_color, source_id) {
   let events = ics_parse_events(raw);
   let view = get_view_range();
 
   for (let i = 0; i < events.length; i++) {
     if (events[i].rrule) {
+      ics_expand_rrule(events[i], color, text_color, source_id, view.start, view.end);
       continue;
     }
     ics_expand_event(events[i], color, text_color, source_id, view.start, view.end);
