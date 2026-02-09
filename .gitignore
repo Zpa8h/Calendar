@@ -55,3 +55,7 @@ dkms.conf
 *.swp
 
 .*
+
+# Generated TOC configs and outputs
+toc_config.json
+*.toc.md

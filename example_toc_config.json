@@ -1,0 +1,43 @@
+{
+  "title": "SOP - Standard Operating Procedures",
+  "sections": [
+    {
+      "name": "Getting Started",
+      "files": [
+        "Onboarding.md",
+        "Setup-Guide.md"
+      ]
+    },
+    {
+      "name": "Daily Tasks",
+      "files": [
+        "Morning-Checklist.md",
+        "Email-Management.md",
+        "Standup-Notes.md"
+      ]
+    },
+    {
+      "name": "Processes",
+      "files": [
+        "Code-Review-Process.md",
+        "Deployment-Checklist.md",
+        "Release-Notes.md"
+      ]
+    },
+    {
+      "name": "Tools & Systems",
+      "files": [
+        "Slack-Workflow.md",
+        "GitHub-Guidelines.md",
+        "Jira-Board-Management.md"
+      ]
+    },
+    {
+      "name": "Emergency Procedures",
+      "files": [
+        "Incident-Response.md",
+        "Rollback-Procedures.md"
+      ]
+    }
+  ]
+}
