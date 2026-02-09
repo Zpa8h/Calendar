@@ -1,5 +1,71 @@
-NeatoCal
-===
+# Obsidian Utilities Collection
+
+## Vault TOC Generator with Mermaid
+
+A Python tool that generates beautiful, visual tables of contents for your Obsidian vault folders using Mermaid diagrams.
+
+### Features
+
+- **Scan folder structure** automatically
+- **Organize files into sections** using a simple JSON config
+- **Two diagram styles**:
+  - Mindmap (compact, hierarchical)
+  - Flowchart (traditional hierarchy)
+- **Copy-paste ready** markdown output for Obsidian
+- **Obsidian-compatible links** with `[[file]]` syntax
+
+### Quick Start
+
+```bash
+# Scan your SOP folder and create a config file
+python vault_toc_generator.py "/path/to/SOP"
+
+# Edit the generated toc_config.json to organize files into sections
+
+# Generate markdown with mermaid diagram
+python vault_toc_generator.py "/path/to/SOP" -c toc_config.json -o toc.md
+
+# Copy the contents of toc.md into your Obsidian note
+```
+
+### Usage Examples
+
+```bash
+python vault_toc_generator.py "/path/to/SOP"                    # Scan folder, create config
+python vault_toc_generator.py "/path/to/SOP" -c config.json     # Use existing config
+python vault_toc_generator.py "/path/to/SOP" -o output.md       # Save to file
+python vault_toc_generator.py "/path/to/SOP" -d flowchart       # Use flowchart style
+python vault_toc_generator.py "/path/to/SOP" -t "My SOP"        # Custom title
+```
+
+### Config File Format
+
+See `example_toc_config.json` for a complete example:
+
+```json
+{
+  "title": "SOP - Standard Operating Procedures",
+  "sections": [
+    {
+      "name": "Getting Started",
+      "files": [
+        "Onboarding.md",
+        "Setup-Guide.md"
+      ]
+    },
+    {
+      "name": "Daily Tasks",
+      "files": [
+        "Morning-Checklist.md"
+      ]
+    }
+  ]
+}
+```
+
+---
+
+# NeatoCal
 
 A neato calendar with the full year on a single page.
 
