@@ -120,30 +120,42 @@ def generate_mermaid_mindmap(config):
     """Generate a Mermaid mindmap diagram with subsections."""
     lines = ["```mermaid", "mindmap"]
     title = config['title']
-    lines.append(f"  root((({title}))))")
+    lines.append(f"  root((\"{title}\"))")
+
+    click_lines = []
+    node_id = 0
 
     for section in config.get("sections", []):
         section_name = section["name"]
-        safe_section = section_name.replace("(", "\\(").replace(")", "\\)")
+        safe_section = section_name.replace("(", " ").replace(")", " ").strip()
         lines.append(f"    {safe_section}")
 
         # Add files from this section (not in subsections)
         for file in section.get("files", []):
             file_name = file.replace(".md", "").replace(".MD", "")
-            safe_file = file_name.replace("(", "\\(").replace(")", "\\)")
+            safe_file = file_name.replace("(", " ").replace(")", " ").strip()
             lines.append(f"      {safe_file}")
+            # Store click handler
+            safe_link = file.replace('"', '\\"')
+            click_lines.append(f"click mm_{node_id} \"[[{file}]]\"")
+            node_id += 1
 
         # Add subsections
         for subsection in section.get("subsections", []):
             sub_name = subsection["name"]
-            safe_sub = sub_name.replace("(", "\\(").replace(")", "\\)")
+            safe_sub = sub_name.replace("(", " ").replace(")", " ").strip()
             lines.append(f"      {safe_sub}")
 
             for file in subsection.get("files", []):
                 file_name = file.replace(".md", "").replace(".MD", "")
-                safe_file = file_name.replace("(", "\\(").replace(")", "\\)")
+                safe_file = file_name.replace("(", " ").replace(")", " ").strip()
                 lines.append(f"        {safe_file}")
+                # Store click handler
+                safe_link = file.replace('"', '\\"')
+                click_lines.append(f"click mm_{node_id} \"[[{file}]]\"")
+                node_id += 1
 
+    lines.extend(click_lines)
     lines.append("```")
     return "\n".join(lines)
 
@@ -155,42 +167,47 @@ def generate_mermaid_flowchart(config):
     # Root node
     root_id = "root"
     title = config['title']
-    safe_title = title.replace("\"", '\\"')
+    safe_title = title.replace('"', '\\"')
     lines.append(f"    {root_id}[\"{safe_title}\"]")
 
     # Sections and files
     node_counter = 0
+    click_lines = []
+
     for section_idx, section in enumerate(config.get("sections", [])):
         section_name = section["name"]
         section_id = f"section_{section_idx}"
-        safe_section = section_name.replace("\"", '\\"')
+        safe_section = section_name.replace('"', '\\"')
         lines.append(f"    {section_id}[\"{safe_section}\"]")
         lines.append(f"    {root_id} --> {section_id}")
 
         # Files directly in section
         for file_idx, file in enumerate(section.get("files", [])):
             file_name = file.replace(".md", "").replace(".MD", "")
+            safe_file = file_name.replace('"', '\\"')
             file_id = f"file_{section_idx}_{node_counter}"
-            safe_file = file_name.replace("\"", '\\"')
             lines.append(f"    {file_id}[\"{safe_file}\"]")
             lines.append(f"    {section_id} --> {file_id}")
+            click_lines.append(f"    click {file_id} \"[[{file}]]\"")
             node_counter += 1
 
         # Subsections
         for sub_idx, subsection in enumerate(section.get("subsections", [])):
             sub_name = subsection["name"]
             sub_id = f"subsection_{section_idx}_{sub_idx}"
-            safe_sub = sub_name.replace("\"", '\\"')
+            safe_sub = sub_name.replace('"', '\\"')
             lines.append(f"    {sub_id}[\"{safe_sub}\"]")
             lines.append(f"    {section_id} --> {sub_id}")
 
             for file_idx, file in enumerate(subsection.get("files", [])):
                 file_name = file.replace(".md", "").replace(".MD", "")
+                safe_file = file_name.replace('"', '\\"')
                 file_id = f"subfile_{section_idx}_{sub_idx}_{file_idx}"
-                safe_file = file_name.replace("\"", '\\"')
                 lines.append(f"    {file_id}[\"{safe_file}\"]")
                 lines.append(f"    {sub_id} --> {file_id}")
+                click_lines.append(f"    click {file_id} \"[[{file}]]\"")
 
+    lines.extend(click_lines)
     lines.append("```")
     return "\n".join(lines)
 
