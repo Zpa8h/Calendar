@@ -6,62 +6,72 @@ A Python tool that generates beautiful, visual tables of contents for your Obsid
 
 ### Features
 
-- **Scan folder structure** automatically
-- **Organize files into sections** using a simple JSON config
+- **Scan all files** from any folder (case-insensitive, includes all file types)
+- **Organize with markdown** - edit a simple template to organize into sections
+- **Support for subsections** - use `###` for sections, `####` for subsections
 - **Two diagram styles**:
-  - Mindmap (compact, hierarchical)
-  - Flowchart (traditional hierarchy)
+  - Mindmap (compact, hierarchical, default)
+  - Flowchart (traditional top-down hierarchy)
 - **Copy-paste ready** markdown output for Obsidian
 - **Obsidian-compatible links** with `[[file]]` syntax
 
 ### Quick Start
 
 ```bash
-# Scan your SOP folder and create a config file
-python vault_toc_generator.py "/path/to/SOP"
+# Step 1: Scan your folder and generate a template
+python vault_toc_generator.py "/path/to/SOP" -o toc.md
 
-# Edit the generated toc_config.json to organize files into sections
+# Step 2: Edit toc.md to organize files into sections/subsections
+# (See template instructions inside)
 
-# Generate markdown with mermaid diagram
-python vault_toc_generator.py "/path/to/SOP" -c toc_config.json -o toc.md
+# Step 3: Regenerate the mermaid diagram after organizing
+python vault_toc_generator.py -i toc.md -d mindmap -o final.md
 
-# Copy the contents of toc.md into your Obsidian note
+# Step 4: Copy final.md into your Obsidian note
 ```
 
 ### Usage Examples
 
 ```bash
-python vault_toc_generator.py "/path/to/SOP"                    # Scan folder, create config
-python vault_toc_generator.py "/path/to/SOP" -c config.json     # Use existing config
-python vault_toc_generator.py "/path/to/SOP" -o output.md       # Save to file
-python vault_toc_generator.py "/path/to/SOP" -d flowchart       # Use flowchart style
-python vault_toc_generator.py "/path/to/SOP" -t "My SOP"        # Custom title
+# Generate template (step 1)
+python vault_toc_generator.py "/path/to/SOP" -o toc.md
+
+# Switch diagram style (step 3)
+python vault_toc_generator.py -i toc.md -d flowchart -o final.md
+
+# Custom title
+python vault_toc_generator.py "/path/to/SOP" -t "My SOP" -o toc.md
+
+# Output to console instead of file
+python vault_toc_generator.py "/path/to/SOP"
 ```
 
-### Config File Format
+### How to Organize Files
 
-See `example_toc_config.json` for a complete example:
+In your markdown template, use standard markdown headings:
 
-```json
-{
-  "title": "SOP - Standard Operating Procedures",
-  "sections": [
-    {
-      "name": "Getting Started",
-      "files": [
-        "Onboarding.md",
-        "Setup-Guide.md"
-      ]
-    },
-    {
-      "name": "Daily Tasks",
-      "files": [
-        "Morning-Checklist.md"
-      ]
-    }
-  ]
-}
+```markdown
+### Main Section
+- [[File1]]
+- [[File2]]
+
+#### Subsection
+- [[File3]]
+- [[File4]]
 ```
+
+**Structure:**
+- `### Title` = Main section (appears as branch in mindmap)
+- `#### Title` = Subsection (appears as sub-branch under its parent)
+- `- [[File]]` = File link (Obsidian wiki-link format)
+
+**Diagram Types:**
+- `-d mindmap` - Creates a compact mind map (default)
+- `-d flowchart` - Creates a traditional hierarchical flowchart
+
+Both diagram types automatically render subsections with the proper hierarchy.
+
+
 
 ---
 
